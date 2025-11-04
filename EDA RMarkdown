@@ -1,6 +1,6 @@
 ---
-title: "EDA Part 1"
-author: "Seth Grace"
+title: "EDA"
+author: "Seth Grace, Jack Julian"
 date: "`r Sys.Date()`"
 output: 
   html_document:
@@ -151,10 +151,16 @@ df[duplicated(df),]
 
 None of these duplicates seem like true duplicates so they will all be kept.
 
+
+## Drop emp_title
+```{r}
+df <- df |>
+  select(-emp_title)
+```
+
 ## Impute Category mths_since_last_delinq
 ```{r}
-df$mths_since_last_delinq = factor(df$mths_since_last_delinq)
-df$mths_since_last_delinq = fct_explicit_na(df$mths_since_last_delinq, 'never')
+df$mths_since_last_delinq[is.na(df$mths_since_last_delinq)] = 0
 ```
 
 It is reasonable to assume that this variable had so many blanks for borrowers who were never delinquent so we imputed the data with that in mind.
@@ -237,9 +243,19 @@ We elected to remove the observation with the large DTI as it seemed unrealistic
 
 ## Convert dates to a date
 ```{r}
-df$issue_d <- my(df$issue_d)
-df$last_credit_pull_d <- my(df$last_credit_pull_d)
-df$earliest_cr_line <- my(df$earliest_cr_line)
+# Make sure lubridate is available
+if(!require(lubridate)) install.packages("lubridate")
+
+# Convert date variables from "Month-Year" format
+df$earliest_cr_line <- lubridate::my(df$earliest_cr_line)
+df$last_credit_pull_d <- lubridate::my(df$last_credit_pull_d)
+
+# Calculate length of credit line in years and round
+df$length_of_credit_line <- round(as.numeric(df$last_credit_pull_d - df$earliest_cr_line) / 365.25, 2)
+
+# Drop the original date columns
+df <- df |> 
+  dplyr::select(-earliest_cr_line, -last_credit_pull_d)
 ```
 
 
@@ -249,7 +265,6 @@ df <- df %>%
   mutate(
     log_annual_inc = log1p(annual_inc),   # has zeros
     log_revol_bal  = log1p(revol_bal),    # has zeros
-    log_installment = log(installment),   # no zeros
     log_loan_amnt = log(loan_amnt)        # no zeros
   )
 ```
@@ -290,16 +305,23 @@ df <- df %>% select(-emp_length)
 
 ## Date
 ```{r}
-df$issue_year <- as.numeric(format(df$issue_d, "%Y"))
-df$issue_month <- as.numeric(format(df$issue_d, "%m"))
-df <- df %>% select(-issue_d)
+# Make sure lubridate is available
+if(!require(lubridate)) install.packages("lubridate")
+
+# Convert issue_d, extract year and month, then drop original
+df$issue_d <- lubridate::my(df$issue_d)
+df$issue_year <- lubridate::year(df$issue_d)
+df$issue_month <- lubridate::month(df$issue_d)
+df <- df |> dplyr::select(-issue_d)
 ```
 
 ## Remove Unnecessary Variables
 ```{r}
 df <- df |> select(-hardship_flag)
 df <- df |> select(-title)
-df <- df |> select(-emp_title)
+df <- df |> select(-acc_now_delinq)
+df <- df |> select(-application_type)
+df <- df |> select(-debt_settlement_flag)
 ```
 
 Certain variables do not add any value to the dataset and were therefore removed. hardship_flag only  had one level and was removed. Title was incredibly messy and had too many levels so it was removed.
@@ -308,9 +330,19 @@ Certain variables do not add any value to the dataset and were therefore removed
 
 ```{r}
 df <- df %>%
-  mutate(fico_range_avg = fico_range_low + fico_range_high / 2)
+  mutate(fico_range_avg = (fico_range_low + fico_range_high) / 2)
 df <- df |> select(-fico_range_low)
 df <- df |> select(-fico_range_high)
+```
+
+## Factor Lump Purpose
+```{r}
+df <- df |> 
+  dplyr::mutate(purpose = forcats::fct_lump(purpose, n = 3))
+```
+
+```{r}
+table(df$purpose)
 ```
 
 ## Convert pub_rec to bins
@@ -339,17 +371,13 @@ df <- df %>%
 df$PubRecBin <- factor(df$PubRecBin, 
                        levels = c("0", "1", "2+"))
 table(df$PubRecBin)
+
+df <- df |> select(-pub_rec)
 ```
 
 Looking over the data we elected not to do a PCA model as there was very little correlation among the variables.
 
 # Engineering
-
-## Credit History Length
-```{r}
-#df$credit_history_length <- as.numeric(difftime(df$issue_d, #df$earliest_cr_line, units="days"))/365
-#df <- df %>% select(-earliest_cr_line)
-```
 
 ```{r}
 head(df$address)
@@ -387,6 +415,10 @@ df <- df %>% select(-location)
 
 ```{r}
 df$region <- as.factor(df$region)
+```
+
+```{r}
+df <- df |> dplyr::mutate(dplyr::across(where(is.integer), as.numeric))
 ```
 
 
