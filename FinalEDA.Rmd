@@ -1,0 +1,443 @@
+---
+title: "EDA"
+author: "Seth Grace, Jack Julian"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    code_folding: show
+    df_print: paged
+    number_sections: yes
+    theme: readable
+    toc: yes
+    toc_float: yes
+    code_download: yes
+  word_document:
+    toc: no
+---
+
+```{r setup, include=FALSE,message=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE,warning=FALSE)
+knitr::opts_chunk$set(fig.width=8, fig.height=6)
+
+if(require(pacman)==0)
+   {install.packages("pacman")}
+pacman::p_load(devtools,caret,cluster,dplyr,fastDummies,leaps,pacman,tidyverse,skimr,fastDummies,GGally,DataExplorer,ggrepel,ggthemes,dslabs,scatterplot3d,corrplot, ggforce)
+
+if (!require(mlba)) {
+  library(devtools)
+  install_github("gedeck/mlba/mlba", force=FALSE)
+}
+pacman::p_load(mlba,tidyverse)
+```
+
+# Read the Data In
+```{r}
+#df = read.csv('M:/MSBA/ISA 591/ISA 591/Data/train.csv', stringsAsFactors = TRUE)
+df = read.csv('M:/MSBA/ISA 591/Data/train.csv', stringsAsFactors = TRUE)
+```
+
+# Data Overview
+
+## Get an Idea for Data
+```{r}
+head(df)
+skim(df)
+str(df)
+```
+This dataset contains information on 237,730 consumer loans, with the response variable being if the borrower defaulted or not (loan_default). Roughly 80% of loans did not default, while about 20% did. The data includes a mix of loan details, borrower characteristics, credit history, and financial indicators, spread across 36 variables (18 numeric and 18 categorical). Key loan features include the amount borrowed (loan_amnt), term length (36 or 60 months), interest rate (int_rate), and monthly installment (installment). Borrower-related information such as annual income (annual_inc), employment length (emp_length), homeownership status, and debt-to-income ratio (dti) provides insight into financial stability, while credit-related variables such as FICO score ranges, number of open accounts, public records, and credit utilization reflect creditworthiness.
+
+The dataset is relatively comprehensive, but will need some further cleaning and transforming before an analysis is conducted.
+
+## Summary of Data
+```{r}
+numerics <- df[sapply(df, is.numeric)]
+summary(numerics)
+```
+
+## Frequency for Categorical Data with < 25 levels
+```{r}
+lapply(df[sapply(df, function(x) is.factor(x) & length(levels(x)) < 25)], table)
+```
+
+This dataset contains information on 237,730 consumer loans, with the response variable being if the borrower defaulted or not (loan_default). Roughly 80% of loans did not default, while about 20% did. The data includes a mix of loan details, borrower characteristics, credit history, and financial indicators, spread across 36 variables (18 numeric and 18 categorical). Key loan features include the amount borrowed (loan_amnt), term length (36 or 60 months), interest rate (int_rate), and monthly installment (installment). Borrower-related information such as annual income (annual_inc), employment length (emp_length), homeownership status, and debt-to-income ratio (dti) provides insight into financial stability, while credit-related variables such as FICO score ranges, number of open accounts, public records, and credit utilization reflect creditworthiness.
+
+The dataset is relatively comprehensive, but will need some further cleaning and transforming before an analysis is conducted.
+
+# Data Visualization
+
+## Histograms without Outliers
+```{r}
+# Page 1
+df |>
+  select(where(is.numeric)) |>
+  pivot_longer(everything()) |>
+  group_by(name) |>
+  filter(value >= quantile(value, 0.01, na.rm = TRUE) & 
+         value <= quantile(value, 0.99, na.rm = TRUE)) |>
+  ggplot(aes(x = value)) +
+  geom_histogram() +
+  facet_wrap_paginate(~name, scales = "free", ncol = 3, nrow = 3, page = 1)
+
+# Page 2
+df |>
+  select(where(is.numeric)) |>
+  pivot_longer(everything()) |>
+  group_by(name) |>
+  filter(value >= quantile(value, 0.01, na.rm = TRUE) & 
+         value <= quantile(value, 0.99, na.rm = TRUE)) |>
+  ggplot(aes(x = value)) +
+  geom_histogram() +
+  facet_wrap_paginate(~name, scales = "free", ncol = 3, nrow = 3, page = 2)
+```
+Looking at the charts we see that a large proportion of the data is skewed right and should be considered for transforming. Certain variables like installment, loan_amnt, mths_since_last_delinq, and int_rate have several peaks around common points for these variables. 
+The histogram for acc_now_delinq did not provide any value and may be worth considering removing. 
+
+## Bar Charts
+```{r}
+library(ggforce)
+df |>
+  select(where(is.factor)) |>
+  select(where(~ nlevels(.) <= 7)) |>
+  pivot_longer(everything()) |>
+  ggplot(aes(x = value)) +
+  geom_bar() +
+  facet_wrap_paginate(~name, scales = "free", ncol = 3, nrow = 3) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+Looking at the bar charts, we can see a fairly even distribution for verification_status. The majority of loans are individual application. Most home_ownership status is either mortgage or renters. Most elect for the shorter of the two loan cycle (36 instead of 60). Most elect for a fractional loan although there is also a large portion of whole loans.
+
+Also the variable hardship_flag will need to be removed as there is no purpose behind a variable with 1 level.
+
+## Correlation Map
+```{r}
+df |>
+  select(where(is.numeric)) |>
+  cor(use = "complete.obs") |>
+  corrplot(
+    method = "color",
+    tl.cex = 0.8
+  )
+```
+
+Looking at the correlation map, we see that many of the variables are not correlated at all. However, certain variables such as loan_amnt and installment and fico_range_low and fico_range_high are directly correlated.
+
+It would be worth considering removing installment and perhaps using feature engineering to merge the fico-based variables into one variable.
+
+# Handle Missing Data
+
+## Check For Missing Data
+```{r}
+missing = colSums(is.na(df))
+namissing= missing[missing > 0]
+print(namissing)
+```
+
+We can see there are 4 variables that are missing data, we will look to impute them are accordingly.
+
+## Tables of Variables Missing Data
+```{r}
+table(df$mort_acc)
+table(df$pub_rec_bankruptcies)
+```
+
+Both tables seem to have a high number of 0's and it is reasonable to impute the with so. For revol_util, we will use the median instead.
+
+We elected not to display a table for revol_util as it has a large number of unique observations.
+
+## Check for Duplicates
+```{r}
+df[duplicated(df),]
+```
+
+None of these duplicates seem like true duplicates so they will all be kept.
+
+
+## Drop emp_title
+```{r}
+df <- df |>
+  select(-emp_title)
+```
+
+## Impute Category mths_since_last_delinq
+```{r}
+df$mths_since_last_delinq[is.na(df$mths_since_last_delinq)] = 0
+```
+
+It is reasonable to assume that this variable had so many blanks for borrowers who were never delinquent so we imputed the data with that in mind.
+
+## Impute Variable pub_rec_bankruptcies
+```{r}
+df$pub_rec_bankruptcies[is.na(df$pub_rec_bankruptcies)] = 0
+```
+
+## Impute Variable mort_acc
+```{r}
+df$mort_acc[is.na(df$mort_acc)] = 0
+```
+
+## Impute Variable revol_util
+```{r}
+df$revol_util[is.na(df$revol_util)] <- median(df$revol_util, na.rm = TRUE)
+```
+
+## Check For Missing Data
+```{r}
+missing = colSums(is.na(df))
+namissing= missing[missing > 0]
+print(namissing)
+```
+
+# Outlier Detection
+
+## Boxplots 
+```{r}
+# Page 1
+df |>
+  select(where(is.numeric), loan_default) |>
+  pivot_longer(-loan_default) |>
+  ggplot(aes(x = loan_default, y = value)) +
+  geom_boxplot() +
+  facet_wrap_paginate(~name, scales = "free", ncol = 3, nrow = 3, page = 1)
+
+# Page 2
+df |>
+  select(where(is.numeric), loan_default) |>
+  pivot_longer(-loan_default) |>
+  ggplot(aes(x = loan_default, y = value)) +
+  geom_boxplot() +
+  facet_wrap_paginate(~name, scales = "free", ncol = 3, nrow = 3, page = 2)
+```
+
+Looking at the box plots, we see a number of outliers in different variables, some which will be removed and others that will not.
+
+One that will likely need to be removed is in DTI which has a single value at 10000. This is likely an error and should be changed.
+
+Annual_inc has several in the millions which we should be wary of as they can highly skew the data.
+
+One individual has about 85 pub_rec which may be worth removing.
+
+Other variables with a noticeable outlier include revol_bal, open_acc, and total_acc. These will all need slightly more investigating before a decision is made on whether or not they will be kept.
+
+## Max DTI Row
+```{r}
+variables <- c("dti", "pub_rec", "revol_bal", "open_acc", "total_acc")
+
+all_max_rows <- map_dfr(variables, ~ {
+  df |>
+    slice_max(!!sym(.x), n = 1) |>
+    mutate(max_variable = .x)
+})
+
+all_max_rows
+```
+
+## Remove DTI observation
+```{r}
+df <- df |>
+  filter(dti != max(dti, na.rm = TRUE))
+```
+
+We elected to remove the observation with the large DTI as it seemed unrealistic. The individual had no job or income and had an impossibly high DTI as a result. Due to the sheer number of observations, we thought it was best to just remove it.
+
+```{r}
+table(df$last_credit_pull_d)
+table(df$earliest_cr_line)
+```
+
+
+# Data Transformation
+
+## Convert dates to a date
+```{r}
+# Make sure lubridate is available
+if(!require(lubridate)) install.packages("lubridate")
+
+# Convert date variables from "Month-Year" format
+df$earliest_cr_line <- lubridate::my(df$earliest_cr_line)
+df$last_credit_pull_d <- lubridate::my(df$last_credit_pull_d)
+
+# Impute missing last credit pull dates with the most recent date in dataset
+max_pull_date <- max(df$last_credit_pull_d, na.rm = TRUE)
+df$last_credit_pull_d[is.na(df$last_credit_pull_d)] <- max_pull_date
+
+# Calculate length of credit line in years and round
+df$length_of_credit_line <- round(
+  as.numeric(df$last_credit_pull_d - df$earliest_cr_line) / 365.25, 
+  2
+)
+
+# Drop the original date columns
+df <- df |>
+  dplyr::select(-earliest_cr_line, -last_credit_pull_d)
+
+```
+
+
+## Log Transformations on Skewed Predictors
+```{r}
+df <- df %>%
+  mutate(
+    log_annual_inc = log1p(annual_inc),   # has zeros
+    log_revol_bal  = log1p(revol_bal),    # has zeros
+    log_loan_amnt = log(loan_amnt)        # no zeros
+  )
+```
+
+
+# Dimension Reduction
+
+## Installment vs Loan Amount
+```{r}
+cor(df$installment, df$loan_amnt)
+df <- df |> select(-installment)
+```
+
+These are the only two variables with an extremely high correlation as can be seen on our matrix above. We feel we should drop installment to avoid Multicollinearity
+
+## Grade vs Sub Grade
+```{r}
+df$grade <- factor(df$grade, levels = c("A","B","C","D","E","F","G"), ordered = TRUE)
+df <- df %>% select(-sub_grade)
+```
+
+We elected to remove sub_grade as it was deemed repetitive to have both grade and sub_grade
+
+## Employee Length
+```{r}
+df <- df %>%
+  mutate(emp_length = as.character(emp_length),
+         emp_length_num = case_when(
+           emp_length == "< 1 year" ~ 0.5,   # special case
+           emp_length == "10+ years" ~ 10,   # cap at 10
+           emp_length %in% c("n/a", "", NA) ~ 0,  # missing or blank → 0
+           TRUE ~ as.numeric(str_extract(emp_length, "\\d+"))
+         ))
+
+table(df$emp_length_num)
+df <- df %>% select(-emp_length)
+```
+
+## Date
+```{r}
+# Make sure lubridate is available
+if(!require(lubridate)) install.packages("lubridate")
+
+# Convert issue_d, extract year and month, then drop original
+df$issue_d <- lubridate::my(df$issue_d)
+df$issue_year <- lubridate::year(df$issue_d)
+df$issue_month <- lubridate::month(df$issue_d)
+df <- df |> dplyr::select(-issue_d)
+```
+
+## Remove Unnecessary Variables
+```{r}
+df <- df |> select(-hardship_flag)
+df <- df |> select(-title)
+df <- df |> select(-acc_now_delinq)
+df <- df |> select(-application_type)
+df <- df |> select(-debt_settlement_flag)
+```
+
+Certain variables do not add any value to the dataset and were therefore removed. hardship_flag only  had one level and was removed. Title was incredibly messy and had too many levels so it was removed.
+
+## Combining and then dropping FICO scores
+
+```{r}
+df <- df %>%
+  mutate(fico_range_avg = (fico_range_low + fico_range_high) / 2)
+df <- df |> select(-fico_range_low)
+df <- df |> select(-fico_range_high)
+```
+
+## Factor Lump Purpose
+```{r}
+df <- df |> 
+  dplyr::mutate(purpose = forcats::fct_lump(purpose, n = 3))
+```
+
+```{r}
+table(df$purpose)
+```
+
+## Convert pub_rec to bins
+```{r}
+# Public Record Bankruptcies 
+df <- df %>%
+  mutate(PubBankBin = case_when(
+    pub_rec_bankruptcies == 0 ~ "0",
+    pub_rec_bankruptcies == 1 ~ "1",
+    pub_rec_bankruptcies > 1  ~ "2+",
+    TRUE ~ NA_character_
+  ))
+df$PubBankBin <- factor(df$PubBankBin, 
+                       levels = c("0", "1", "2+"))
+table(df$PubBankBin)
+
+# Public Record 
+df <- df %>%
+  mutate(PubRecBin = case_when(
+    pub_rec == 0 ~ "0",
+    pub_rec == 1 ~ "1",
+    pub_rec > 1  ~ "2+",
+    TRUE ~ NA_character_
+  ))
+
+df$PubRecBin <- factor(df$PubRecBin, 
+                       levels = c("0", "1", "2+"))
+table(df$PubRecBin)
+
+df <- df |> select(-pub_rec)
+```
+
+Looking over the data we elected not to do a PCA model as there was very little correlation among the variables.
+
+# Engineering
+
+```{r}
+head(df$address)
+```
+
+## Create Location Variable from Address
+```{r}
+df <- df |>
+  dplyr::mutate(location= stringr::str_extract(address, "\\b[A-Z]{2}\\b(?=\\s+\\d)"))
+df <- df %>% select(-address)
+```
+
+```{r}
+unique(df$location)
+```
+
+```{R}
+df <- df |>
+  dplyr::mutate(
+    region = dplyr::case_when(
+      location %in% c("CT", "ME", "MA", "NH", "RI", "VT", "NJ", "NY", "PA") ~ "Northeast",
+      location %in% c("IL", "IN", "MI", "OH", "WI", "IA", "KS", "MN", "MO", "NE", "ND", "SD") ~ "Midwest", 
+      location %in% c("DE", "FL", "GA", "MD", "NC", "SC", "VA", "DC", "WV", "AL", "KY", "MS", "TN", "AR", "LA", "OK", "TX") ~ "South",
+      location %in% c("AZ", "CO", "ID", "MT", "NV", "NM", "UT", "WY", "AK", "CA", "HI", "OR", "WA") ~ "West",
+      location %in% c("AA", "AE", "AP") ~ "Military/Overseas",
+      TRUE ~ "Other"
+    )
+  )
+
+# Check the results
+df |>
+  dplyr::count(region, sort = TRUE)
+df <- df %>% select(-location)
+```
+
+```{r}
+df$region <- as.factor(df$region)
+```
+
+```{r}
+df <- df |> dplyr::mutate(dplyr::across(where(is.integer), as.numeric))
+```
+
+
+## Create an RDS file
+```{r}
+#saveRDS(df, file = "M:/MSBA/ISA 591/ISA 591/EDA_cleaned.RDS")
+saveRDS(df, file = "M:/MSBA/ISA 591/EDA_cleaned.RDS")
+```
