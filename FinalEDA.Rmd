@@ -32,8 +32,8 @@ pacman::p_load(mlba,tidyverse)
 
 # Read the Data In
 ```{r}
-#df = read.csv('M:/MSBA/ISA 591/ISA 591/Data/train.csv', stringsAsFactors = TRUE)
-df = read.csv('M:/MSBA/ISA 591/Data/train.csv', stringsAsFactors = TRUE)
+df = read.csv('M:/MSBA/ISA 591/ISA 591/Data/train.csv', stringsAsFactors = TRUE)
+#df = read.csv('M:/MSBA/ISA 591/Data/train.csv', stringsAsFactors = TRUE)
 ```
 
 # Data Overview
@@ -163,6 +163,20 @@ df <- df |>
 df$mths_since_last_delinq[is.na(df$mths_since_last_delinq)] = 0
 ```
 
+```{r}
+df <- df |> 
+  dplyr::mutate(
+    mths_since_last_delinq = dplyr::case_when(
+      mths_since_last_delinq == 0 ~ "Never",
+      mths_since_last_delinq >= 1 & mths_since_last_delinq <= 12 ~ "Within Last Year",
+      mths_since_last_delinq > 12 ~ "1+ Years Ago",
+      TRUE ~ NA_character_  # handles any missing values
+    ) |> 
+    factor(levels = c("Never", "Within Last Year", "1+ Years Ago"))
+  )
+```
+
+levels
 It is reasonable to assume that this variable had so many blanks for borrowers who were never delinquent so we imputed the data with that in mind.
 
 ## Impute Variable pub_rec_bankruptcies
@@ -239,11 +253,11 @@ df <- df |>
 
 We elected to remove the observation with the large DTI as it seemed unrealistic. The individual had no job or income and had an impossibly high DTI as a result. Due to the sheer number of observations, we thought it was best to just remove it.
 
-```{r}
-table(df$last_credit_pull_d)
-table(df$earliest_cr_line)
-```
 
+```{r}
+df <- df |> 
+  dplyr::filter(`last_credit_pull_d` != "" & !is.na(`last_credit_pull_d`))
+```
 
 # Data Transformation
 
@@ -272,14 +286,17 @@ df <- df |>
 
 ```
 
+```{r}
+df <- df |> 
+  dplyr::filter(revol_bal != max(revol_bal, na.rm = TRUE))
+```
 
 ## Log Transformations on Skewed Predictors
-```{r}
+```{r}#
 df <- df %>%
   mutate(
     log_annual_inc = log1p(annual_inc),   # has zeros
     log_revol_bal  = log1p(revol_bal),    # has zeros
-    log_loan_amnt = log(loan_amnt)        # no zeros
   )
 ```
 
@@ -294,10 +311,9 @@ df <- df |> select(-installment)
 
 These are the only two variables with an extremely high correlation as can be seen on our matrix above. We feel we should drop installment to avoid Multicollinearity
 
-## Grade vs Sub Grade
+## Grade
 ```{r}
-df$grade <- factor(df$grade, levels = c("A","B","C","D","E","F","G"), ordered = TRUE)
-df <- df %>% select(-sub_grade)
+df <- df %>% select(-grade)
 ```
 
 We elected to remove sub_grade as it was deemed repetitive to have both grade and sub_grade
@@ -387,6 +403,7 @@ df$PubRecBin <- factor(df$PubRecBin,
 table(df$PubRecBin)
 
 df <- df |> select(-pub_rec)
+df <- df |> select(-pub_rec_bankruptcies)
 ```
 
 Looking over the data we elected not to do a PCA model as there was very little correlation among the variables.
@@ -438,6 +455,6 @@ df <- df |> dplyr::mutate(dplyr::across(where(is.integer), as.numeric))
 
 ## Create an RDS file
 ```{r}
-#saveRDS(df, file = "M:/MSBA/ISA 591/ISA 591/EDA_cleaned.RDS")
-saveRDS(df, file = "M:/MSBA/ISA 591/EDA_cleaned.RDS")
+saveRDS(df, file = "M:/MSBA/ISA 591/ISA 591/EDA_cleaned.RDS")
+#saveRDS(df, file = "M:/MSBA/ISA 591/EDA_cleaned.RDS")
 ```
