@@ -21,7 +21,7 @@ knitr::opts_chunk$set(fig.width=8, fig.height=6)
 
 if(require(pacman)==0)
    {install.packages("pacman")}
-pacman::p_load(devtools,caret,cluster,dplyr,fastDummies,leaps,pacman,tidyverse,skimr,fastDummies,GGally,DataExplorer,ggrepel,ggthemes,dslabs,scatterplot3d,corrplot, ggforce)
+pacman::p_load(devtools,caret,cluster,dplyr,fastDummies,leaps,pacman,tidyverse,skimr,GGally,DataExplorer,ggrepel,ggthemes,dslabs,scatterplot3d,corrplot, ggforce)
 
 if (!require(mlba)) {
   library(devtools)
@@ -32,8 +32,8 @@ pacman::p_load(mlba,tidyverse)
 
 # Read the Data In
 ```{r}
-df = read.csv('M:/MSBA/ISA 591/ISA 591/Data/train.csv', stringsAsFactors = TRUE)
-#df = read.csv('M:/MSBA/ISA 591/Data/train.csv', stringsAsFactors = TRUE)
+#df = read.csv('M:/MSBA/ISA 591/ISA 591/Data/train.csv', stringsAsFactors = TRUE)
+df = read.csv('M:/MSBA/ISA 591/Data/Holdout.csv', stringsAsFactors = TRUE)
 ```
 
 # Data Overview
@@ -66,6 +66,7 @@ The dataset is relatively comprehensive, but will need some further cleaning and
 # Data Visualization
 
 ## Histograms without Outliers
+
 ```{r}
 # Page 1
 df |>
@@ -89,6 +90,22 @@ df |>
   geom_histogram() +
   facet_wrap_paginate(~name, scales = "free", ncol = 3, nrow = 3, page = 2)
 ```
+
+
+
+```{r}
+df |>
+  dplyr::select(where(is.numeric)) |>
+  tidyr::pivot_longer(everything()) |>
+  dplyr::group_by(name) |>
+  dplyr::filter(value >= quantile(value, 0.01, na.rm = TRUE) & 
+                value <= quantile(value, 0.99, na.rm = TRUE)) |>
+  ggplot2::ggplot(aes(x = value)) +
+  ggplot2::geom_histogram() +
+  ggforce::facet_wrap_paginate(~name, scales = "free", ncol = 3, nrow = 3, page = 1)
+```
+
+
 Looking at the charts we see that a large proportion of the data is skewed right and should be considered for transforming. Certain variables like installment, loan_amnt, mths_since_last_delinq, and int_rate have several peaks around common points for these variables. 
 The histogram for acc_now_delinq did not provide any value and may be worth considering removing. 
 
@@ -160,20 +177,23 @@ df <- df |>
 
 ## Impute Category mths_since_last_delinq
 ```{r}
-df$mths_since_last_delinq[is.na(df$mths_since_last_delinq)] = 0
-```
-
-```{r}
-df <- df |> 
+df <- df |>
   dplyr::mutate(
     mths_since_last_delinq = dplyr::case_when(
-      mths_since_last_delinq == 0 ~ "Never",
-      mths_since_last_delinq >= 1 & mths_since_last_delinq <= 12 ~ "Within Last Year",
-      mths_since_last_delinq > 12 ~ "1+ Years Ago",
-      TRUE ~ NA_character_  # handles any missing values
-    ) |> 
-    factor(levels = c("Never", "Within Last Year", "1+ Years Ago"))
+      is.na(mths_since_last_delinq) | mths_since_last_delinq == 0 ~ "Never",
+      mths_since_last_delinq <= 6 ~ "Very Recent (0-6 months)",
+      mths_since_last_delinq <= 12 ~ "Recent (7-12 months)", 
+      mths_since_last_delinq <= 24 ~ "Moderate (1-2 years)",
+      mths_since_last_delinq <= 48 ~ "Distant (2-4 years)",
+      TRUE ~ "Very Distant (4+ years)"
+    ) |>
+    factor(levels = c("Never", "Very Distant (4+ years)", "Distant (2-4 years)", 
+                     "Moderate (1-2 years)", "Recent (7-12 months)", 
+                     "Very Recent (0-6 months)"))
   )
+
+# Check the result
+table(df$mths_since_last_delinq)
 ```
 
 levels
@@ -292,12 +312,14 @@ df <- df |>
 ```
 
 ## Log Transformations on Skewed Predictors
-```{r}#
+```{r}
 df <- df %>%
   mutate(
     log_annual_inc = log1p(annual_inc),   # has zeros
     log_revol_bal  = log1p(revol_bal),    # has zeros
   )
+df <- df |> select(-annual_inc)
+df <- df |> select(-revol_bal)
 ```
 
 
@@ -313,7 +335,7 @@ These are the only two variables with an extremely high correlation as can be se
 
 ## Grade
 ```{r}
-df <- df %>% select(-grade)
+#df <- df %>% select(-grade)
 ```
 
 We elected to remove sub_grade as it was deemed repetitive to have both grade and sub_grade
@@ -349,9 +371,22 @@ df <- df |> dplyr::select(-issue_d)
 ```{r}
 df <- df |> select(-hardship_flag)
 df <- df |> select(-title)
-df <- df |> select(-acc_now_delinq)
-df <- df |> select(-application_type)
-df <- df |> select(-debt_settlement_flag)
+#df <- df |> select(-acc_now_delinq)
+#df <- df |> select(-application_type)
+#df <- df |> select(-debt_settlement_flag)
+# Public Record 
+df <- df %>%
+  mutate(
+    acc_now_delinqBin = case_when(
+      acc_now_delinq == 0 ~ "0",
+      acc_now_delinq == 1 ~ "1",
+      acc_now_delinq > 1  ~ "2+",
+      TRUE ~ NA_character_
+    ),
+    acc_now_delinqBin = factor(acc_now_delinqBin, levels = c("0", "1", "2+"))
+  ) %>%
+  select(-acc_now_delinq)
+
 ```
 
 Certain variables do not add any value to the dataset and were therefore removed. hardship_flag only  had one level and was removed. Title was incredibly messy and had too many levels so it was removed.
@@ -453,8 +488,35 @@ df <- df |> dplyr::mutate(dplyr::across(where(is.integer), as.numeric))
 ```
 
 
+```{r}
+library(fastDummies)
+
+loan_df_onehot <- fastDummies::dummy_cols(
+  df,
+  select_columns = c(
+    "home_ownership",
+    "verification_status",
+    "purpose",
+    "PubBanknBin"
+  ),
+  remove_selected_columns = TRUE,  # removes the original categorical vars
+  remove_first_dummy = FALSE       # keeps ALL levels → true one-hot encoding
+)
+```
+
+
+
+
+
+```{r}
+missing = colSums(is.na(df_enhanced))
+namissing= missing[missing > 0]
+print(namissing)
+```
+
+
 ## Create an RDS file
 ```{r}
-saveRDS(df, file = "M:/MSBA/ISA 591/ISA 591/EDA_cleaned.RDS")
-#saveRDS(df, file = "M:/MSBA/ISA 591/EDA_cleaned.RDS")
+#saveRDS(df, file = "M:/MSBA/ISA 591/ISA 591/EDA_cleaned.RDS")
+saveRDS(loan_df_onehot, file = "M:/MSBA/ISA 591/Holdout_cleaned.RDS")
 ```
