@@ -373,11 +373,19 @@ table(train.smaller$loan_default)</code></pre>
 ##    No   Yes 
 ## 20128  4872</code></pre>
 </div>
+
+<p>We elected to downsample to 25,000 observations due to issues with computational power. By reducing to 25,000 observations we increase the bias and possibly the variance as well. It is a potentially risky move however, given our processing power we elected to move forward with it.</p>
+
+
+  
 <div id="rf-model" class="section level1">
 <h1>RF Model</h1>
 <pre class="r"><code>cores=parallel::detectCores()
 cores</code></pre>
 <pre><code>## [1] 64</code></pre>
+
+<p>We used parallel processing to use multiple cores so that we could speed up the model training.</p>  
+
 <pre class="r"><code># Here we are using cores-1, but you can adjust this based on your machine
 cl &lt;- parallel::makeCluster(cores-1)  # Set CPU cores for parallel execution
 registerDoParallel(cl)  # Register parallel backend
@@ -405,7 +413,7 @@ rf_cv &lt;- train(
   nodesize = 3              # smaller nodes → more granular splits
 )
 
-
+<p>This code implements a comprehensive Random Forest model with systematic hyperparameter tuning and cross-validation optimization. The model uses a custom grid search approach where `mtry` (the number of variables randomly sampled at each split) is tested across values from 1 to 38 (total features minus 1) in increments of 2, allowing the algorithm to find the optimal balance between model variance and bias. The 5-fold cross-validation setup with `classProbs = TRUE` and `summaryFunction = twoClassSummary` enables AUC-based optimization rather than simple accuracy, which is crucial for imbalanced datasets like loan defaults where we care more about ranking borrowers by risk than just classification accuracy. The model builds 500 trees (`ntree = 500`) to ensure stable predictions through ensemble averaging, while the smaller `nodesize = 3` allows for more granular decision splits that can capture complex patterns in the data. The `importance = TRUE` setting calculates variable importance scores, enabling us to understand which features drive the model's predictions, making this a more thorough and interpretable approach compared to the baseline XGBoost model.</p>▌
 
 rf_cv</code></pre>
 <pre><code>## Random Forest 
@@ -476,7 +484,7 @@ stopCluster(cl)  # Shut down parallel cluster
 registerDoSEQ()  # Reset to sequential processing</code></pre>
 </div>
 
-
+<p>The Random Forest cross-validation results demonstrate strong model performance with an optimal mtry value of 13, achieving the highest ROC score of 0.7349. This indicates that randomly sampling 13 variables at each split provides the best predictive power, representing about one-third of the available features. The model shows remarkably high sensitivity (above 98% across all mtry values), meaning it successfully identifies nearly all borrowers who won't default. However, the consistently low specificity (10-12%) reveals that the model struggles to correctly identify actual defaulters, missing approximately 88-90% of true default cases. The variable importance analysis shows debt settlement flag as the overwhelmingly dominant predictor (100.0 importance), followed by interest rate (27.1) and 60-month loan terms (24.0). The model effectively captures a diverse range of risk factors, including credit scores, financial ratios, loan characteristics, and borrower demographics. The plot visualization confirms that mtry values between 11-15 perform similarly well, indicating model stability around the optimal hyperparameter. The ROC score of 0.73 suggests moderate discriminatory ability, but the severe class imbalance issue means the model is heavily biased toward predicting non-defaults, which could result in significant financial losses from undetected defaults in a real lending scenario.</p>▌
 
 
 </div>
@@ -523,3 +531,4 @@ $(document).ready(function () {
 
 </body>
 </html>
+
