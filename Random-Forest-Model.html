@@ -401,11 +401,11 @@ cv_control &lt;- trainControl(
   savePredictions = TRUE
 )
 
-rf_cv &lt;- train(
+rf_cv <- train(
   loan_default ~ .,
   data = train.smaller,
-  method = &quot;rf&quot;,
-  metric = &quot;ROC&quot;,           # now optimizes AUC
+  method = "rf",
+  metric = "ROC",           # now optimizes AUC
   trControl = cv_control,
   tuneGrid = rf_grid,
   ntree = 500,
@@ -413,9 +413,9 @@ rf_cv &lt;- train(
   nodesize = 3              # smaller nodes → more granular splits
 )</code></pre>
 
-<p>This code implements a comprehensive Random Forest model with systematic hyperparameter tuning and cross-validation optimization. The model uses a custom grid search approach where `mtry` (the number of variables randomly sampled at each split) is tested across values from 1 to 38 (total features minus 1) in increments of 2, allowing the algorithm to find the optimal balance between model variance and bias. The 5-fold cross-validation setup with `classProbs = TRUE` and `summaryFunction = twoClassSummary` enables AUC-based optimization rather than simple accuracy, which is crucial for imbalanced datasets like loan defaults where we care more about ranking borrowers by risk than just classification accuracy. The model builds 500 trees (`ntree = 500`) to ensure stable predictions through ensemble averaging, while the smaller `nodesize = 3` allows for more granular decision splits that can capture complex patterns in the data. The `importance = TRUE` setting calculates variable importance scores, enabling us to understand which features drive the model's predictions, making this a more thorough and interpretable approach compared to the baseline XGBoost model.</p>▌
+<p>This code implements a comprehensive Random Forest model with systematic hyperparameter tuning and cross-validation optimization. The model uses a custom grid search approach where `mtry` (the number of variables randomly sampled at each split) is tested across values from 1 to 38 (total features minus 1) in increments of 2, allowing the algorithm to find the optimal balance between model variance and bias. The 5-fold cross-validation setup with `classProbs = TRUE` and `summaryFunction = twoClassSummary` enables AUC-based optimization rather than simple accuracy, which is crucial for imbalanced datasets like loan defaults where we care more about ranking borrowers by risk than just classification accuracy. The model builds 500 trees (`ntree = 500`) to ensure stable predictions through ensemble averaging, while the smaller `nodesize = 3` allows for more granular decision splits that can capture complex patterns in the data. The `importance = TRUE` setting calculates variable importance scores, enabling us to understand which features drive the model's predictions, making this a more thorough and interpretable approach compared to the baseline XGBoost model.</p>
 
-<pre class="r"><code>rf_cv</code></pre><pre><code>## Random Forest 
+<pre class="r"><code>rf_cv</code></pre>
 ## 
 ## 25000 samples
 ##    39 predictor
@@ -530,5 +530,6 @@ $(document).ready(function () {
 
 </body>
 </html>
+
 
 
