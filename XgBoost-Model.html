@@ -414,6 +414,9 @@ xgb_base &lt;- train(
 )
 
 xgb_base</code></pre>
+
+<p>The XGBoost training uses 5-fold cross-validation to automatically test different parameter combinations and find the best settings for your model. By setting tuneLength = 5, caret tests five different configurations of key XGBoost parameters like learning rate and tree depth, optimizing specifically for AUC performance. The parallel processing setup using cores-1 speeds up training by running multiple computations simultaneously, making the process much faster than using a single core. However, the model is still limited by your 25K downsampled dataset, which may prevent it from reaching its full potential since XGBoost typically performs better with larger amounts of training data.</p>
+  
 <pre><code>## eXtreme Gradient Boosting 
 ## 
 ## 25000 samples
@@ -1564,6 +1567,7 @@ $(document).ready(function () {
 
 </body>
 </html>
+
 
 
 
