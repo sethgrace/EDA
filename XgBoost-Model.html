@@ -374,10 +374,11 @@ table(train.smaller$loan_default)</code></pre>
 ##    No   Yes 
 ## 20128  4872</code></pre>
 
-<p>We elected to downsample to 25,000 observations due to issues with computational power. By reducing to 25,000 observations we increase the bias and possibly the variance as well. It is a potentially risky move however, given our processing power we elected to move forward with it.</p>
-
 </div>
 
+<p>We elected to downsample to 25,000 observations due to issues with computational power. By reducing to 25,000 observations we increase the bias and possibly the variance as well. It is a potentially risky move however, given our processing power we elected to move forward with it.</p>
+
+  
 <div id="xg-boost-model" class="section level1">
 <h1>XG Boost Model</h1>
 <pre class="r"><code>cores=parallel::detectCores()
@@ -1560,6 +1561,7 @@ $(document).ready(function () {
 
 </body>
 </html>
+
 
 
 
