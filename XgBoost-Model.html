@@ -368,6 +368,8 @@ set.seed(123)
 train.smaller &lt;- df %&gt;%
   dplyr::sample_n(25000)
 
+<p>We elected to downsample to 25,000 observations due to issues with computational power. By reducing to 25,000 observations we increase the bias and possibly the variance as well. It is a potentially risky move however, given our processing power we elected to move forward with it.</p>
+  
 table(train.smaller$loan_default)</code></pre>
 <pre><code>## 
 ##    No   Yes 
@@ -1555,3 +1557,4 @@ $(document).ready(function () {
 
 </body>
 </html>
+
