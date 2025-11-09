@@ -384,8 +384,11 @@ table(train.smaller$loan_default)</code></pre>
 <pre class="r"><code>cores=parallel::detectCores()
 cores</code></pre>
 <pre><code>## [1] 64</code></pre>
+
+<p>We used parallel processing to use multiple cores so that we could speed up the model training.</p>
+
 <pre class="r"><code># Here we are using cores-1, but you can adjust this based on your machine
-cl &lt;- parallel::makeCluster(cores-1)  # Set CPU cores for parallel execution
+cl <- parallel::makeCluster(cores-1)  # Set CPU cores for parallel execution
 registerDoParallel(cl)  # Register parallel backend
 
 
@@ -1561,6 +1564,7 @@ $(document).ready(function () {
 
 </body>
 </html>
+
 
 
 
