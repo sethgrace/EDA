@@ -1,0 +1,65 @@
+---
+title: "Logistic Regression"
+author: "Seth Grace, Jack Julian"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    code_folding: show
+    df_print: paged
+    number_sections: yes
+    theme: readable
+    toc: yes
+    toc_float: yes
+    code_download: yes
+  word_document:
+    toc: no
+---
+# Document Setup
+```{r setup, include=FALSE,message=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE,warning=FALSE)
+knitr::opts_chunk$set(fig.width=8, fig.height=6)
+
+if(require(pacman)==0)
+   {install.packages("pacman")}
+pacman::p_load(devtools,caret,cluster,dplyr,fastDummies,leaps,pacman,tidyverse,skimr,fastDummies,GGally,DataExplorer,ggrepel,ggthemes,dslabs,scatterplot3d,corrplot, ggforce, doParallel)
+
+if (!require(mlba)) {
+  library(devtools)
+  install_github("gedeck/mlba/mlba", force=FALSE)
+}
+pacman::p_load(mlba,tidyverse)
+```
+
+
+
+# Create Log Models
+```{r}
+train.df=readRDS("M:/MSBA/ISA 591/train_cleaned_dummy.RDS")
+holdout.df <- readRDS("M:/MSBA/ISA 591/Holdout_cleaned_dummy.RDS")
+
+options(scipen = 999)
+
+
+
+logit_full <- glm(loan_default ~ ., data = train.df, family = binomial)
+summary(logit_full)
+```
+
+```{r}
+# Set seed for reproducibility
+set.seed(123)
+# define 5-fold using trainControl
+trControl=caret::trainControl(method = "cv", number = 5)
+alphagrid = 
+# define the grid of lambda values
+grid=expand.grid(.alpha=0,.lambda=seq(0,1,by=0.1)) # Ridge regression since alpha=0
+# Fit the model using 5-fold cross-validation
+model_ridge=caret::train(loan_default ~ ., data = train.df, 
+                      method = "glmnet", 
+                      trControl = trControl, 
+                      tuneGrid = grid)
+model_ridge$bestTune
+final_ridge=model_ridge$finalModel
+coef(final_ridge,s=model_ridge$bestTune$lambda)
+```
+
